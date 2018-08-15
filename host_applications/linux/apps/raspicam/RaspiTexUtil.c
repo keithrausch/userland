@@ -472,12 +472,50 @@ int raspitexutil_capture_bgra(RASPITEX_STATE *state,
          state->width, state->height, bytes_per_pixel);
 
    *buffer_size = state->width * state->height * bytes_per_pixel;
-   *buffer = calloc(*buffer_size, 1);
+   if (! *buffer) 
+       *buffer = calloc(*buffer_size, 1);
    if (! *buffer)
       goto error;
 
    glReadPixels(0, 0, state->width, state->height, GL_RGBA,
          GL_UNSIGNED_BYTE, *buffer);
+   if (glGetError() != GL_NO_ERROR)
+      goto error;
+
+   return 0;
+
+error:
+   *buffer_size = 0;
+   if (*buffer)
+      free(*buffer);
+   *buffer = NULL;
+   return -1;
+}
+
+int raspitexutil_capture_y(RASPITEX_STATE *state,
+      uint8_t **buffer, size_t *buffer_size)
+{
+   const int bytes_per_pixel = 4;
+
+   vcos_log_trace("%s: %dx%d %d", VCOS_FUNCTION,
+         state->width, state->height, bytes_per_pixel);
+
+   *buffer_size = state->width * state->height * bytes_per_pixel;
+   if (! *buffer) 
+       *buffer = calloc(*buffer_size, 1);
+   if (! *buffer)
+      goto error;
+
+   //glPixelTransfer(EGL_RED_SCALE, 0.33333);
+   //glPixelTransfer(EGL_GREEN_SCALE, 0.33333);
+   //glPixelTransfer(EGL_BLUE_SCALE, 0.33333);
+   glReadPixels(0, 0, state->width, state->height, GL_RGBA,
+         GL_UNSIGNED_BYTE, *buffer);
+   //glPixelTransfer(EGL_RED_SCALE, 1.0);
+   //glPixelTransfer(EGL_GREEN_SCALE, 1.0);
+   //glPixelTransfer(EGL_BLUE_SCALE, 1.0);
+
+
    if (glGetError() != GL_NO_ERROR)
       goto error;
 

@@ -115,6 +115,7 @@ typedef struct RASPITEX_CAPTURE
    /// Frame-buffer capture has been requested. Could use
    /// a queue instead here to allow multiple capture requests.
    int request;
+
 } RASPITEX_CAPTURE;
 
 /**
@@ -174,6 +175,17 @@ typedef struct RASPITEX_STATE
    int verbose;                        /// Log FPS
 
    RASPITEX_CAPTURE capture;           /// Frame-buffer capture state
+
+   /// format for writing to stdout: 
+   /// 0: disabled
+   /// 1: rgba8888 (or whatever it is)
+   /// 2: luma
+   /// other modes supported in the future
+   int saveFormat;
+   uint8_t *saveBuffer;
+   size_t saveSize;
+ 
+   int frameNumber;
 
 } RASPITEX_STATE;
 

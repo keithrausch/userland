@@ -95,11 +95,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define CommandGLScene   1
 #define CommandGLWin     2
+#define CommandGLOutput     3
 
 static COMMAND_LIST cmdline_commands[] =
 {
    { CommandGLScene, "-glscene",  "gs",  "GL scene square,teapot,mirror,yuv,sobel,vcsm_square", 1 },
    { CommandGLWin,   "-glwin",    "gw",  "GL window settings <'x,y,w,h'>", 1 },
+   { CommandGLOutput,"-gloutput", "go",  "GL output format to stdout:\"none\"(default),\"bgra\",\"luma\"", 0 },
 };
 
 static int cmdline_commands_size = sizeof(cmdline_commands) / sizeof(cmdline_commands[0]);
@@ -168,6 +170,25 @@ int raspitex_parse_cmdline(RASPITEX_STATE *state,
          used = 2;
          break;
       }
+
+      case CommandGLOutput: // Selects the output mode to stdout
+      {
+         used = 2;
+         state->saveFormat = 0;
+         if (strcmp(arg2, "none") == 0)
+           state->saveFormat = 0;
+         else if (strcmp(arg2, "bgra") == 0)
+           state->saveFormat = 1;
+         else if (strcmp(arg2, "luma") == 0)
+           state->saveFormat = 2;
+         else
+         {
+            used =0;
+            vcos_log_error("Unknown output format %s", arg2);
+         }
+         fprintf(stdout, "Setting Raspitex save format to %d\n", state->saveFormat);
+         break;
+      }
    }
    return used;
 }
@@ -214,6 +235,52 @@ static void update_fps()
  */
 static void raspitex_do_capture(RASPITEX_STATE *state)
 {
+   //fprintf(stdout, "capturing frame %d\n", state->frameNumber);
+
+   state->frameNumber++;
+   // if (state->frameNumber != -1)
+   //   return;
+
+   // allocate buffer on first iteration
+   if (!(state->saveBuffer))
+   {
+      int bytes_per_pixel = 4;
+      state->saveSize = state->width * state->height * bytes_per_pixel;
+      state->saveBuffer = calloc(state->saveSize, 1);
+   }
+
+
+
+   // capture the gl window and send it to stdout
+   int (*outputCaptureFunction)(struct RASPITEX_STATE *state,
+         uint8_t **buffer, size_t *buffer_size);
+   switch (state->saveFormat)
+   {
+   case 0:
+     outputCaptureFunction = NULL;
+     break;
+   case 1:
+     outputCaptureFunction = raspitexutil_capture_bgra;
+     break;
+   case 2:
+     outputCaptureFunction = raspitexutil_capture_y;
+     break;
+   default:
+     outputCaptureFunction = NULL;
+   }
+   if (outputCaptureFunction)
+   {
+      if (outputCaptureFunction(state, &(state->saveBuffer), &(state->saveSize)) == 0)
+      {
+        fprintf(stdout, "capturing frame %d\n", state->frameNumber);
+        //int bytes_written = fwrite(state->saveBuffer, 1, state->saveSize, stdout);
+        //fflush(stdout);
+        //if (bytes_written != state->saveSize)
+        //  vcos_log_error("Wrote %d bytes instead of %d", bytes_written, state->saveSize);
+      }
+   }
+
+
    uint8_t *buffer = NULL;
    size_t size = 0;
 
@@ -629,6 +696,8 @@ void raspitex_destroy(RASPITEX_STATE *state)
    if (state->ops.close)
       state->ops.close(state);
 
+   free(state->saveBuffer);
+
    vcos_semaphore_delete(&state->capture.start_sem);
    vcos_semaphore_delete(&state->capture.completed_sem);
 }
@@ -664,6 +733,12 @@ void raspitex_set_defaults(RASPITEX_STATE *state)
    state->ops.gl_term = raspitexutil_gl_term;
    state->ops.destroy_native_window = raspitexutil_destroy_native_window;
    state->ops.close = raspitexutil_close;
+
+   state->saveFormat = 0; // no output
+   state->saveBuffer = NULL;
+   state->saveSize = 0;
+
+   state->frameNumber = 0;
 }
 
 /* Stops the rendering loop and destroys MMAL resources
